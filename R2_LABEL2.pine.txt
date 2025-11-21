@@ -1,0 +1,1778 @@
+# Pine Script 캔들-레이블 수직선 연결 완벽 오류 가이드
+## 통합 메타 파일 (v1.0)
+
+> **목적**: 캔들과 레이블을 수직 흰색선으로 연결하고 고정할 때 발생 가능한 모든 오류 유형과 해결책을 체계적으로 정리
+
+---
+
+# 📚 목차
+
+1. [line.new() 함수 관련 오류](#1️⃣-linenew-함수-관련-오류)
+2. [리페인팅 및 고정 오류](#2️⃣-리페인팅-및-고정-오류)
+3. [최대 개수 제한 오류](#3️⃣-최대-개수-제한-오류)
+4. [좌표 계산 오류](#4️⃣-좌표-계산-오류)
+5. [스타일 및 표시 오류](#5️⃣-스타일-및-표시-오류)
+6. [레이블과 라인 연동 오류](#6️⃣-레이블과-라인-연동-오류)
+7. [실시간 업데이트 오류](#7️⃣-실시간-업데이트-오류)
+8. [MTF(다중 타임프레임) 오류](#8️⃣-mtf다중-타임프레임-오류)
+9. [조건문 로직 오류](#9️⃣-조건문-로직-오류)
+10. [성능 및 최적화 오류](#🔟-성능-및-최적화-오류)
+11. [버전 호환성 오류](#1️⃣1️⃣-버전-호환성-오류)
+12. [타입 선언 오류](#1️⃣2️⃣-타입-선언-오류)
+13. [배열 관리 오류](#1️⃣3️⃣-배열-관리-오류)
+14. [함수 스코프 오류](#1️⃣4️⃣-함수-스코프-오류)
+15. [조건부 실행 오류](#1️⃣5️⃣-조건부-실행-오류)
+16. [방향성 오류 (Buy/Sell 구분)](#1️⃣6️⃣-방향성-오류-buysell-구분)
+17. [좌표 참조점 오류](#1️⃣7️⃣-좌표-참조점-오류)
+18. [오프셋 계산 오류](#1️⃣8️⃣-오프셋-계산-오류)
+19. [시간 기반 오류](#1️⃣9️⃣-시간-기반-오류)
+20. [차트 유형별 오류](#2️⃣0️⃣-차트-유형별-오류)
+21. [다중 심볼 오류](#2️⃣1️⃣-다중-심볼-오류)
+22. [메모리 및 성능 오류](#2️⃣2️⃣-메모리-및-성능-오류)
+23. [시각적 겹침 오류](#2️⃣3️⃣-시각적-겹침-오류)
+24. [조건 충돌 오류](#2️⃣4️⃣-조건-충돌-오류)
+25. [디버깅 관련 오류](#2️⃣5️⃣-디버깅-관련-오류)
+26. [복합 객체 관리 오류](#2️⃣6️⃣-복합-객체-관리-오류)
+27. [완벽한 구현 템플릿](#📋-완벽한-구현-템플릿)
+28. [오류 빠른 참조표](#📊-오류-유형별-빠른-참조표)
+29. [트러블슈팅 플로우차트](#🔧-트러블슈팅-플로우차트)
+
+---
+
+# 1️⃣ line.new() 함수 관련 오류
+
+## 오류 #01: 좌표 시스템 불일치
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(bar_index, low, bar_index, labelY, xloc=xloc.bar_time)
+// 오류: bar_index와 xloc.bar_time 불일치
+```
+
+### ✅ 올바른 코드
+```pinescript
+line.new(bar_index, low, bar_index, labelY, 
+    xloc=xloc.bar_index, 
+    yloc=yloc.price)
+```
+
+### 💡 설명
+- `bar_index`는 정수 인덱스, `xloc.bar_time`은 타임스탬프 기대
+- 항상 좌표 타입과 xloc 설정을 일치시켜야 함
+
+---
+
+## 오류 #02: 같은 좌표 연결
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(bar_index, low, bar_index, low)
+// 오류: 시작점과 끝점이 같아서 선이 안 보임
+```
+
+### ✅ 올바른 코드
+```pinescript
+line.new(bar_index, low, bar_index, low - atr * 0.5)
+```
+
+### 💡 설명
+- Y1과 Y2가 같으면 길이가 0인 점이 됨
+- 최소한의 오프셋 필요
+
+---
+
+## 오류 #03: extend 속성 잘못 사용
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(x1, y1, x2, y2, extend=extend.both)
+// 오류: 수직선이 무한 연장되어 차트 전체를 가로지름
+```
+
+### ✅ 올바른 코드
+```pinescript
+line.new(x1, y1, x2, y2, extend=extend.none)
+```
+
+### 💡 설명
+- 수직선에 `extend.both`나 `extend.left/right` 사용 시 화면 전체 차지
+- 캔들-레이블 연결선은 항상 `extend.none`
+
+---
+
+# 2️⃣ 리페인팅 및 고정 오류
+
+## 오류 #04: barstate 체크 없음
+
+### ❌ 잘못된 코드
+```pinescript
+if buySignal
+    line.new(bar_index, low, bar_index, labelY)
+// 오류: 캔들 진행 중 계속 생성/삭제되어 깜빡임
+```
+
+### ✅ 올바른 코드
+```pinescript
+if buySignal and barstate.isconfirmed
+    line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 실시간 바에서는 조건이 true/false 반복 가능
+- `barstate.isconfirmed`로 확정된 바에서만 생성
+
+---
+
+## 오류 #05: var 없이 라인 저장
+
+### ❌ 잘못된 코드
+```pinescript
+tempLine = na
+if buySignal
+    tempLine := line.new(...)
+// 오류: 다음 바에서 tempLine 값 사라짐
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line tempLine = na
+if buySignal
+    if not na(tempLine)
+        line.delete(tempLine)
+    tempLine := line.new(...)
+```
+
+### 💡 설명
+- `var` 없이 선언하면 매 바마다 초기화
+- 라인 ID 유지하려면 반드시 `var` 사용
+
+---
+
+# 3️⃣ 최대 개수 제한 오류
+
+## 오류 #06: max_lines_count 설정 없음
+
+### ❌ 잘못된 코드
+```pinescript
+indicator("My Script", overlay=true)
+// 오류: 기본값 50개로 제한, 초과 시 이전 선 삭제됨
+```
+
+### ✅ 올바른 코드
+```pinescript
+indicator("My Script", overlay=true, max_lines_count=500)
+```
+
+### 💡 설명
+- Pine Script 기본 라인 제한은 50개
+- 최대 500개까지 설정 가능
+
+---
+
+## 오류 #07: 라인 누적으로 메모리 초과
+
+### ❌ 잘못된 코드
+```pinescript
+if buySignal
+    line.new(...)  // 계속 생성만 하고 삭제 안함
+// 오류: 500개 제한 도달 시 오래된 선 자동 삭제
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line[] lines = array.new_line()
+
+if buySignal and barstate.isconfirmed
+    if array.size(lines) >= 100
+        oldLine = array.shift(lines)
+        line.delete(oldLine)
+    array.push(lines, line.new(...))
+```
+
+### 💡 설명
+- 명시적 관리 없으면 FIFO로 자동 삭제됨
+- 배열로 직접 관리하여 예측 가능한 동작 보장
+
+---
+
+# 4️⃣ 좌표 계산 오류
+
+## 오류 #08: Y좌표 범위 초과
+
+### ❌ 잘못된 코드
+```pinescript
+labelY = low - atr * 100
+line.new(bar_index, low, bar_index, labelY)
+// 오류: 라벨이 차트 밖으로 나가서 안 보임
+```
+
+### ✅ 올바른 코드
+```pinescript
+labelY = low - math.min(atr * 0.5, low * 0.02)
+line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- ATR 승수가 너무 크면 화면 밖으로 나감
+- 가격의 일정 비율로 제한하는 것이 안전
+
+---
+
+## 오류 #09: na 값 처리 없음
+
+### ❌ 잘못된 코드
+```pinescript
+labelY = low - atr * 0.5
+line.new(bar_index, low, bar_index, labelY)
+// 오류: atr이 na일 경우 선이 안 그려짐
+```
+
+### ✅ 올바른 코드
+```pinescript
+labelY = low - (na(atr) ? close * 0.01 : atr * 0.5)
+if not na(labelY)
+    line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 초기 바에서 ATR 등 지표값이 na일 수 있음
+- 항상 na 체크 및 대체값 제공
+
+---
+
+# 5️⃣ 스타일 및 표시 오류
+
+## 오류 #10: 색상 투명도 100%
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(..., color=color.new(color.white, 100))
+// 오류: 완전 투명해서 안 보임
+```
+
+### ✅ 올바른 코드
+```pinescript
+line.new(..., color=color.new(color.white, 0))
+```
+
+### 💡 설명
+- 투명도 100 = 완전 투명 (안 보임)
+- 투명도 0 = 불투명 (완전히 보임)
+
+---
+
+## 오류 #11: width 0 설정
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(..., width=0)
+// 오류: 선 두께 0이라 안 보임
+```
+
+### ✅ 올바른 코드
+```pinescript
+line.new(..., width=1)
+```
+
+### 💡 설명
+- width는 최소 1 이상이어야 표시됨
+
+---
+
+## 오류 #12: style 잘못 지정
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(..., style="solid")
+// 오류: 문자열이 아닌 상수 사용해야 함
+```
+
+### ✅ 올바른 코드
+```pinescript
+line.new(..., style=line.style_solid)
+```
+
+### 💡 설명
+- 스타일은 내장 상수 사용: `line.style_solid`, `line.style_dashed`, `line.style_dotted`
+
+---
+
+# 6️⃣ 레이블과 라인 연동 오류
+
+## 오류 #13: 라벨과 라인 위치 불일치
+
+### ❌ 잘못된 코드
+```pinescript
+label.new(bar_index, labelY, ...)
+line.new(bar_index, low, bar_index, low - atr)
+// 오류: 라벨 위치와 선 끝점이 다름
+```
+
+### ✅ 올바른 코드
+```pinescript
+labelY = low - atr * 0.5
+label.new(bar_index, labelY, ...)
+line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 라벨 Y좌표와 라인의 Y2가 동일해야 연결됨
+
+---
+
+## 오류 #14: 라벨과 라인 생성 조건 불일치
+
+### ❌ 잘못된 코드
+```pinescript
+if buySignal
+    label.new(...)
+if buySignal and volume > 1000
+    line.new(...)
+// 오류: 라벨은 있는데 선은 없는 경우 발생
+```
+
+### ✅ 올바른 코드
+```pinescript
+if buySignal and barstate.isconfirmed
+    label.new(...)
+    line.new(...)
+```
+
+### 💡 설명
+- 라벨과 라인은 항상 같은 조건에서 쌍으로 생성
+
+---
+
+# 7️⃣ 실시간 업데이트 오류
+
+## 오류 #15: line.set_xy 잘못 사용
+
+### ❌ 잘못된 코드
+```pinescript
+var line myLine = line.new(...)
+if not barstate.isconfirmed
+    line.set_xy1(myLine, bar_index, low)
+// 오류: 매 틱마다 호출되어 성능 저하
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line myLine = na
+if not barstate.isconfirmed
+    if not na(myLine)
+        line.delete(myLine)
+    myLine := line.new(...)
+```
+
+### 💡 설명
+- 실시간 업데이트 시 삭제 후 재생성이 더 효율적
+
+---
+
+## 오류 #16: 라인 삭제 없이 새로 생성
+
+### ❌ 잘못된 코드
+```pinescript
+var line tempLine = na
+if condition
+    tempLine := line.new(...)
+// 오류: 기존 라인 안 지우고 계속 생성
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line tempLine = na
+if condition
+    if not na(tempLine)
+        line.delete(tempLine)
+    tempLine := line.new(...)
+```
+
+### 💡 설명
+- 기존 라인 삭제하지 않으면 누적되어 제한 초과
+
+---
+
+# 8️⃣ MTF(다중 타임프레임) 오류
+
+## 오류 #17: request.security와 line 혼용
+
+### ❌ 잘못된 코드
+```pinescript
+htfLow = request.security(syminfo.tickerid, "60", low)
+line.new(bar_index, htfLow, bar_index, labelY)
+// 오류: HTF 데이터와 현재 타임프레임 bar_index 불일치
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 현재 타임프레임 데이터만 사용
+line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- HTF 데이터의 bar_index는 현재 차트와 다름
+- 라인은 현재 타임프레임 데이터만 사용 권장
+
+---
+
+# 9️⃣ 조건문 로직 오류
+
+## 오류 #18: 중첩 if문에서 라인 생성
+
+### ❌ 잘못된 코드
+```pinescript
+if condition1
+    if condition2
+        line.new(...)
+    label.new(...)
+// 오류: 라벨은 생성되지만 라인은 condition2 만족시만 생성
+```
+
+### ✅ 올바른 코드
+```pinescript
+if condition1 and condition2
+    line.new(...)
+    label.new(...)
+```
+
+### 💡 설명
+- 라벨과 라인 생성 조건이 다르면 짝이 안 맞음
+
+---
+
+## 오류 #19: 과거 바에 라인 그리기
+
+### ❌ 잘못된 코드
+```pinescript
+if buySignal[1]
+    line.new(bar_index[1], low[1], bar_index[1], labelY)
+// 오류: 히스토리 참조로 인한 예상 외 동작
+```
+
+### ✅ 올바른 코드
+```pinescript
+if buySignal and barstate.isconfirmed
+    line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 신호 발생 시점의 현재 바에서 생성하는 것이 안전
+
+---
+
+# 🔟 성능 및 최적화 오류
+
+## 오류 #20: 매 바마다 모든 라인 재생성
+
+### ❌ 잘못된 코드
+```pinescript
+for i = 0 to 499
+    line.new(bar_index - i, close[i], bar_index - i, open[i])
+// 오류: 매우 느리고 타임아웃 발생
+```
+
+### ✅ 올바른 코드
+```pinescript
+if buySignal and barstate.isconfirmed
+    line.new(bar_index, close, bar_index, labelY)
+```
+
+### 💡 설명
+- 조건 충족 시에만 생성
+- 불필요한 반복 생성 피하기
+
+---
+
+# 1️⃣1️⃣ 버전 호환성 오류
+
+## 오류 #21: Pine Script 버전 미지정
+
+### ❌ 잘못된 코드
+```pinescript
+indicator("My Script", overlay=true)
+line.new(bar_index, low, bar_index, labelY)
+// 오류: v4 이하에서는 line.new() 문법이 다름
+```
+
+### ✅ 올바른 코드
+```pinescript
+//@version=5
+indicator("My Script", overlay=true, max_lines_count=500)
+line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 항상 `//@version=5` 명시
+- v5 문법과 기능 사용 보장
+
+---
+
+## 오류 #22: v4 문법을 v5에서 사용
+
+### ❌ 잘못된 코드
+```pinescript
+//@version=5
+line.new(bar_index, low, bar_index, labelY, 
+    color=color.white, 
+    transp=50)  // v5에서 transp 제거됨
+```
+
+### ✅ 올바른 코드
+```pinescript
+//@version=5
+line.new(bar_index, low, bar_index, labelY, 
+    color=color.new(color.white, 50))
+```
+
+### 💡 설명
+- v5에서 `transp` 파라미터 제거됨
+- `color.new(색상, 투명도)` 사용
+
+---
+
+# 1️⃣2️⃣ 타입 선언 오류
+
+## 오류 #23: 타입 불일치
+
+### ❌ 잘못된 코드
+```pinescript
+var int myLine = na
+myLine := line.new(bar_index, low, bar_index, labelY)
+// 오류: int 타입에 line 할당 불가
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line myLine = na
+myLine := line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 라인 ID는 `line` 타입으로 선언
+
+---
+
+## 오류 #24: series vs simple 타입 혼동
+
+### ❌ 잘못된 코드
+```pinescript
+lineColor = close > open ? color.green : color.red
+line.new(bar_index, low, bar_index, labelY, color=lineColor)
+// 경고: series color 관련 문제 가능
+```
+
+### ✅ 올바른 코드
+```pinescript
+lineColor = close > open ? color.green : color.red
+line.new(bar_index, low, bar_index, labelY, 
+    color=color.new(lineColor, 0))
+```
+
+### 💡 설명
+- 동적 색상은 `color.new()`로 래핑하면 안전
+
+---
+
+# 1️⃣3️⃣ 배열 관리 오류
+
+## 오류 #25: 배열 초기화 위치 오류
+
+### ❌ 잘못된 코드
+```pinescript
+if buySignal
+    var line[] lineArray = array.new_line()  // var가 if문 안에
+    array.push(lineArray, line.new(...))
+// 오류: 조건문 내 var 선언으로 예상 외 동작
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line[] lineArray = array.new_line()  // 전역 스코프
+if buySignal
+    array.push(lineArray, line.new(...))
+```
+
+### 💡 설명
+- 배열 선언은 항상 전역 스코프에서 `var`와 함께
+
+---
+
+## 오류 #26: 빈 배열에서 요소 접근
+
+### ❌ 잘못된 코드
+```pinescript
+var line[] lineArray = array.new_line()
+lastLine = array.get(lineArray, 0)  // 빈 배열
+line.delete(lastLine)
+// 오류: 런타임 에러
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line[] lineArray = array.new_line()
+if array.size(lineArray) > 0
+    lastLine = array.get(lineArray, 0)
+    line.delete(lastLine)
+```
+
+### 💡 설명
+- 배열 접근 전 항상 size 체크
+
+---
+
+## 오류 #27: 배열 인덱스 범위 초과
+
+### ❌ 잘못된 코드
+```pinescript
+var line[] lineArray = array.new_line()
+for i = 0 to 100
+    line.delete(array.get(lineArray, i))
+// 오류: 배열 크기보다 큰 인덱스
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line[] lineArray = array.new_line()
+for i = 0 to array.size(lineArray) - 1
+    line.delete(array.get(lineArray, i))
+array.clear(lineArray)
+```
+
+### 💡 설명
+- 반복 범위는 `array.size() - 1`까지
+
+---
+
+# 1️⃣4️⃣ 함수 스코프 오류
+
+## 오류 #28: 함수 내 var 사용
+
+### ❌ 잘못된 코드
+```pinescript
+drawLine() =>
+    var line myLine = na  // 함수 내 var
+    myLine := line.new(bar_index, low, bar_index, labelY)
+    myLine
+// 오류: 예상과 다르게 동작
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line myLine = na  // 전역 선언
+
+drawLine() =>
+    if not na(myLine)
+        line.delete(myLine)
+    line.new(bar_index, low, bar_index, labelY)
+
+if buySignal
+    myLine := drawLine()
+```
+
+### 💡 설명
+- 상태 유지가 필요한 변수는 전역에서 선언
+
+---
+
+## 오류 #29: 함수 반환값 무시
+
+### ❌ 잘못된 코드
+```pinescript
+drawLine() =>
+    line.new(bar_index, low, bar_index, labelY)
+
+if buySignal
+    drawLine()  // 반환값 저장 안함
+// 오류: 나중에 수정/삭제 불가
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line myLine = na
+
+drawLine() =>
+    line.new(bar_index, low, bar_index, labelY)
+
+if buySignal
+    if not na(myLine)
+        line.delete(myLine)
+    myLine := drawLine()
+```
+
+### 💡 설명
+- 라인 ID를 변수에 저장해야 관리 가능
+
+---
+
+# 1️⃣5️⃣ 조건부 실행 오류
+
+## 오류 #30: 삼항 연산자에서 line 생성
+
+### ❌ 잘못된 코드
+```pinescript
+myLine = buySignal ? line.new(bar_index, low, bar_index, labelY) : na
+// 오류: 매 바마다 평가되어 불필요한 생성
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line myLine = na
+if buySignal and barstate.isconfirmed
+    if not na(myLine)
+        line.delete(myLine)
+    myLine := line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 드로잉 생성은 if문 사용 권장
+
+---
+
+## 오류 #31: switch문에서 라인 누락
+
+### ❌ 잘못된 코드
+```pinescript
+switch signalType
+    "buy" => label.new(bar_index, labelY, "B")
+    "sell" => label.new(bar_index, labelY, "S")
+// 오류: 라인 생성 누락
+```
+
+### ✅ 올바른 코드
+```pinescript
+switch signalType
+    "buy" =>
+        label.new(bar_index, labelY, "B", style=label.style_label_up)
+        line.new(bar_index, low, bar_index, labelY, color=color.white)
+    "sell" =>
+        label.new(bar_index, labelY, "S", style=label.style_label_down)
+        line.new(bar_index, high, bar_index, labelY, color=color.white)
+```
+
+### 💡 설명
+- 모든 case에서 라벨과 라인 쌍으로 생성
+
+---
+
+# 1️⃣6️⃣ 방향성 오류 (Buy/Sell 구분)
+
+## 오류 #32: 매수/매도 방향 혼동
+
+### ❌ 잘못된 코드
+```pinescript
+// 매도 신호인데 low 사용
+if sellSignal
+    labelY = low - atr * 0.5  // 잘못됨: 매도는 위쪽
+    line.new(bar_index, low, bar_index, labelY)
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 매수: 캔들 아래 (low → 아래)
+if buySignal
+    labelY = low - atr * 0.5
+    label.new(bar_index, labelY, "B", style=label.style_label_up)
+    line.new(bar_index, low, bar_index, labelY, color=color.white)
+
+// 매도: 캔들 위 (high → 위)
+if sellSignal
+    labelY = high + atr * 0.5
+    label.new(bar_index, labelY, "S", style=label.style_label_down)
+    line.new(bar_index, high, bar_index, labelY, color=color.white)
+```
+
+### 💡 설명
+- 매수: low 기준, 아래로 연결
+- 매도: high 기준, 위로 연결
+
+---
+
+## 오류 #33: 레이블 스타일과 위치 불일치
+
+### ❌ 잘못된 코드
+```pinescript
+labelY = low - atr * 0.5
+label.new(bar_index, labelY, "B", style=label.style_label_down)
+// 오류: 아래 위치인데 label_down (화살표가 아래를 향함)
+```
+
+### ✅ 올바른 코드
+```pinescript
+labelY = low - atr * 0.5
+label.new(bar_index, labelY, "B", style=label.style_label_up)
+// label_up: 화살표가 위를 향해 캔들을 가리킴
+```
+
+### 💡 설명
+- `label_up`: 레이블 위에 화살표 (아래 배치 시 사용)
+- `label_down`: 레이블 아래에 화살표 (위 배치 시 사용)
+
+---
+
+# 1️⃣7️⃣ 좌표 참조점 오류
+
+## 오류 #34: 잘못된 캔들 기준점
+
+### ❌ 잘못된 코드
+```pinescript
+// close 사용 - 변동함
+labelY = close - atr * 0.5
+line.new(bar_index, close, bar_index, labelY)
+// 문제: close는 실시간 변동하므로 선 위치 불안정
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 매수: low 사용 (캔들 최저점 - 고정)
+labelY = low - atr * 0.5
+line.new(bar_index, low, bar_index, labelY)
+
+// 매도: high 사용 (캔들 최고점 - 고정)
+labelY = high + atr * 0.5
+line.new(bar_index, high, bar_index, labelY)
+```
+
+### 💡 설명
+- 확정된 바의 low/high는 고정값
+- close는 실시간 바에서 계속 변동
+
+---
+
+## 오류 #35: wick vs body 혼동
+
+### ❌ 잘못된 코드
+```pinescript
+// 몸통 하단 사용
+candleBottom = math.min(open, close)
+line.new(bar_index, candleBottom, bar_index, labelY)
+// 문제: 꼬리(wick)가 더 길면 선이 캔들 내부에서 시작
+```
+
+### ✅ 올바른 코드
+```pinescript
+// low/high 사용 (꼬리 포함 전체)
+line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- low/high는 꼬리 끝점 포함
+- open/close는 몸통만 (꼬리 무시)
+
+---
+
+# 1️⃣8️⃣ 오프셋 계산 오류
+
+## 오류 #36: 고정 픽셀값 사용
+
+### ❌ 잘못된 코드
+```pinescript
+labelY = low - 10  // 고정 값
+line.new(bar_index, low, bar_index, labelY)
+// 오류: 가격대에 따라 10이 너무 크거나 작음
+// BTC(50000): 10은 거의 안 보임
+// 저가주(0.5): 10은 화면 밖
+```
+
+### ✅ 올바른 코드
+```pinescript
+// ATR 기반 동적 계산
+atrValue = ta.atr(14)
+labelY = low - atrValue * 0.5
+line.new(bar_index, low, bar_index, labelY)
+
+// 또는 퍼센트 기반
+labelY = low * 0.995  // 0.5% 아래
+```
+
+### 💡 설명
+- 고정값은 심볼/가격대마다 다르게 보임
+- ATR 또는 % 기반 계산으로 일관성 유지
+
+---
+
+## 오류 #37: ATR 기간 부적절
+
+### ❌ 잘못된 코드
+```pinescript
+atrValue = ta.atr(1)  // 너무 짧음
+labelY = low - atrValue * 0.5
+// 문제: ATR(1)은 단일 바 범위라 불안정
+```
+
+### ✅ 올바른 코드
+```pinescript
+atrValue = ta.atr(14)  // 표준 14기간
+labelY = low - atrValue * 0.5
+```
+
+### 💡 설명
+- ATR(1)은 단일 캔들 범위 = 매우 변동적
+- ATR(14)가 표준, 안정적인 오프셋 제공
+
+---
+
+## 오류 #38: 로그 스케일 미고려
+
+### ❌ 잘못된 코드
+```pinescript
+// 로그 차트에서 산술 계산
+labelY = low - atr * 0.5
+// 문제: 로그 스케일에서는 산술 빼기가 비례하지 않음
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 퍼센트 기반 계산 (로그 스케일에 적합)
+labelY = low * (1 - 0.02)  // 2% 아래
+line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 로그 차트에서는 % 기반 계산이 시각적으로 균일
+
+---
+
+# 1️⃣9️⃣ 시간 기반 오류
+
+## 오류 #39: xloc.bar_time 사용 시 타임스탬프 오류
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(time, low, time, labelY, xloc=xloc.bar_time)
+// 오류: time은 밀리초 단위, 계산 실수 발생 쉬움
+```
+
+### ✅ 올바른 코드
+```pinescript
+// bar_index 사용 권장 (간단하고 안전)
+line.new(bar_index, low, bar_index, labelY, xloc=xloc.bar_index)
+```
+
+### 💡 설명
+- `bar_index`는 정수로 직관적
+- `time`은 Unix 타임스탬프로 복잡
+
+---
+
+## 오류 #40: 미래 바 참조
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(bar_index + 5, low, bar_index + 5, labelY)
+// 오류: 미래 바는 존재하지 않아 표시 안됨
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 현재 또는 과거 바만 참조
+line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 미래 bar_index는 아직 존재하지 않음
+- 현재(bar_index) 또는 과거(bar_index - n)만 사용
+
+---
+
+# 2️⃣0️⃣ 차트 유형별 오류
+
+## 오류 #41: Heikin Ashi에서 실제 가격 사용
+
+### ❌ 잘못된 코드
+```pinescript
+// HA 차트에서 직접 low 사용
+line.new(bar_index, low, bar_index, labelY)
+// 문제: HA의 low는 평균값, 실제 low가 아님
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 실제 가격 가져오기
+realLow = request.security(syminfo.tickerid, timeframe.period, low, 
+    barmerge.gaps_off, barmerge.lookahead_off)
+labelY = realLow - atr * 0.5
+line.new(bar_index, realLow, bar_index, labelY)
+```
+
+### 💡 설명
+- Heikin Ashi OHLC는 계산된 평균값
+- 실제 가격 필요 시 request.security 사용
+
+---
+
+## 오류 #42: Renko/P&F 차트 미지원
+
+### ❌ 잘못된 코드
+```pinescript
+// Renko 차트에서 일반 로직 사용
+line.new(bar_index, low, bar_index, labelY)
+// 문제: Renko는 시간이 아닌 가격 기반, bar_index 동작 다름
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 차트 유형 체크 후 처리
+isStandardChart = not (chart.is_renko or chart.is_pnf or 
+    chart.is_kagi or chart.is_linebreak)
+
+if isStandardChart and buySignal
+    line.new(bar_index, low, bar_index, labelY)
+```
+
+### 💡 설명
+- 비표준 차트는 bar_index 동작이 다를 수 있음
+- 차트 유형 체크 후 조건부 실행
+
+---
+
+# 2️⃣1️⃣ 다중 심볼 오류
+
+## 오류 #43: 다른 심볼 데이터로 라인 그리기
+
+### ❌ 잘못된 코드
+```pinescript
+btcLow = request.security("BTCUSDT", "D", low)
+line.new(bar_index, btcLow, bar_index, btcLow - atr)
+// 오류: 현재 심볼 차트에 BTC 가격 표시 - 스케일 완전히 다름
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 같은 심볼 데이터만 사용
+line.new(bar_index, low, bar_index, labelY)
+
+// 다른 심볼 표시 필요 시 별도 패널 또는 정규화 필요
+```
+
+### 💡 설명
+- 다른 심볼 가격은 스케일이 완전히 다름
+- 같은 차트에 그리면 보이지 않거나 왜곡됨
+
+---
+
+# 2️⃣2️⃣ 메모리 및 성능 오류
+
+## 오류 #44: 불필요한 라인 속성 변경
+
+### ❌ 잘못된 코드
+```pinescript
+var line myLine = line.new(bar_index, low, bar_index, labelY)
+line.set_color(myLine, color.white)
+line.set_width(myLine, 1)
+line.set_style(myLine, line.style_solid)
+// 오류: 생성 시 지정 가능한 속성을 매번 다시 설정
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line myLine = na
+if buySignal and barstate.isconfirmed
+    myLine := line.new(bar_index, low, bar_index, labelY,
+        color=color.white, width=1, style=line.style_solid)
+```
+
+### 💡 설명
+- 생성 시 모든 속성 지정이 효율적
+- set_ 함수는 동적 변경 필요할 때만 사용
+
+---
+
+## 오류 #45: 무한 루프 위험
+
+### ❌ 잘못된 코드
+```pinescript
+var line[] lines = array.new_line()
+while array.size(lines) < 1000
+    array.push(lines, line.new(bar_index, low, bar_index, labelY))
+// 오류: 스크립트 실행 시간 초과 (타임아웃)
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line[] lines = array.new_line()
+if buySignal and barstate.isconfirmed
+    if array.size(lines) < 500
+        array.push(lines, line.new(bar_index, low, bar_index, labelY))
+```
+
+### 💡 설명
+- while 루프에서 대량 생성 금지
+- 조건부로 점진적 생성
+
+---
+
+# 2️⃣3️⃣ 시각적 겹침 오류
+
+## 오류 #46: 같은 위치에 다중 라인
+
+### ❌ 잘못된 코드
+```pinescript
+if buySignal
+    line.new(bar_index, low, bar_index, labelY, color=color.white)
+if rsiSignal  // buySignal과 동시 발생 가능
+    line.new(bar_index, low, bar_index, labelY, color=color.green)
+// 문제: 두 선이 완전히 겹쳐서 하나만 보임
+```
+
+### ✅ 올바른 코드
+```pinescript
+if buySignal or rsiSignal
+    // 우선순위에 따라 색상 결정
+    lineColor = buySignal and rsiSignal ? color.yellow : 
+                buySignal ? color.white : color.green
+    line.new(bar_index, low, bar_index, labelY, color=lineColor)
+```
+
+### 💡 설명
+- 동일 위치 다중 신호는 하나로 통합
+- 색상으로 복합 신호 표시
+
+---
+
+## 오류 #47: 라인이 캔들을 가림
+
+### ❌ 잘못된 코드
+```pinescript
+line.new(bar_index, high + atr, bar_index, low - atr, 
+    width=5, color=color.white)
+// 문제: 두꺼운 선이 캔들 전체를 가로지름
+```
+
+### ✅ 올바른 코드
+```pinescript
+// 캔들 외부에만 선 그리기, 얇고 반투명하게
+line.new(bar_index, low, bar_index, labelY, 
+    width=1, color=color.new(color.white, 30))
+```
+
+### 💡 설명
+- 수직선은 캔들 외부 영역에만
+- 얇은 선(width=1)과 약간의 투명도 권장
+
+---
+
+# 2️⃣4️⃣ 조건 충돌 오류
+
+## 오류 #48: 상호 배타적 조건 미처리
+
+### ❌ 잘못된 코드
+```pinescript
+if buySignal
+    line.new(bar_index, low, bar_index, low - atr * 0.5)
+if sellSignal
+    line.new(bar_index, high, bar_index, high + atr * 0.5)
+// 문제: 동시 발생 시 두 라인 모두 생성 (의도하지 않은 결과)
+```
+
+### ✅ 올바른 코드
+```pinescript
+if buySignal and not sellSignal
+    line.new(bar_index, low, bar_index, low - atr * 0.5, color=color.green)
+else if sellSignal and not buySignal
+    line.new(bar_index, high, bar_index, high + atr * 0.5, color=color.red)
+else if buySignal and sellSignal
+    // 충돌 처리: 우선순위 결정 또는 무시
+    na
+```
+
+### 💡 설명
+- 매수/매도 동시 발생 가능성 고려
+- 명시적 우선순위 또는 무시 로직 필요
+
+---
+
+# 2️⃣5️⃣ 디버깅 관련 오류
+
+## 오류 #49: 라인 ID 로깅 실패
+
+### ❌ 잘못된 코드
+```pinescript
+myLine = line.new(bar_index, low, bar_index, labelY)
+label.new(bar_index, high, str.tostring(myLine))
+// 오류: line 타입은 직접 문자열 변환 불가
+```
+
+### ✅ 올바른 코드
+```pinescript
+var int lineCount = 0
+if buySignal and barstate.isconfirmed
+    line.new(bar_index, low, bar_index, labelY)
+    lineCount += 1
+    label.new(bar_index, high, "Line #" + str.tostring(lineCount))
+```
+
+### 💡 설명
+- line 객체는 str.tostring() 불가
+- 별도 카운터로 추적
+
+---
+
+## 오류 #50: na 체크 순서 오류
+
+### ❌ 잘못된 코드
+```pinescript
+if line.get_y1(myLine) > 0 and not na(myLine)
+// 오류: myLine이 na면 get_y1에서 런타임 에러
+```
+
+### ✅ 올바른 코드
+```pinescript
+if not na(myLine) and line.get_y1(myLine) > 0
+    // na 체크를 먼저 (단축 평가)
+```
+
+### 💡 설명
+- Pine Script는 단축 평가(short-circuit) 지원
+- na 체크를 항상 먼저
+
+---
+
+# 2️⃣6️⃣ 복합 객체 관리 오류
+
+## 오류 #51: 라인-레이블 쌍 불일치
+
+### ❌ 잘못된 코드
+```pinescript
+var line myLine = na
+var label myLabel = na
+
+if buySignal
+    myLine := line.new(...)
+if buySignal and volume > avgVol  // 추가 조건
+    myLabel := label.new(...)
+// 문제: 라인은 있는데 레이블 없는 경우 발생
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line myLine = na
+var label myLabel = na
+
+if buySignal and barstate.isconfirmed
+    // 항상 쌍으로 삭제
+    if not na(myLine)
+        line.delete(myLine)
+    if not na(myLabel)
+        label.delete(myLabel)
+    
+    // 항상 쌍으로 생성
+    myLine := line.new(bar_index, low, bar_index, labelY)
+    myLabel := label.new(bar_index, labelY, "B")
+```
+
+### 💡 설명
+- 라인과 레이블은 항상 동일 조건에서 쌍으로 관리
+
+---
+
+## 오류 #52: 객체 쌍 배열 동기화 실패
+
+### ❌ 잘못된 코드
+```pinescript
+var line[] lines = array.new_line()
+var label[] labels = array.new_label()
+
+if buySignal
+    array.push(lines, line.new(...))
+if buySignal and someCondition
+    array.push(labels, label.new(...))
+// 문제: 배열 크기 불일치로 인덱스 매핑 깨짐
+```
+
+### ✅ 올바른 코드
+```pinescript
+var line[] lines = array.new_line()
+var label[] labels = array.new_label()
+
+if buySignal and barstate.isconfirmed
+    // 항상 쌍으로 추가
+    array.push(lines, line.new(...))
+    array.push(labels, label.new(...))
+    
+// 삭제 시에도 동시에
+if array.size(lines) > 100
+    line.delete(array.shift(lines))
+    label.delete(array.shift(labels))
+```
+
+### 💡 설명
+- 두 배열의 크기가 항상 같아야 인덱스로 매칭 가능
+
+---
+
+# 📋 완벽한 구현 템플릿
+
+```pinescript
+//@version=5
+indicator("Perfect Candle-Label Line Connection", 
+    overlay=true, 
+    max_lines_count=500, 
+    max_labels_count=500)
+
+// ═══════════════════════════════════════════════════════════════
+// 입력 설정
+// ═══════════════════════════════════════════════════════════════
+atrPeriod      = input.int(14, "ATR Period", minval=1)
+atrMultiplier  = input.float(0.5, "ATR Multiplier", minval=0.1, maxval=2.0)
+lineColor      = input.color(color.white, "Line Color")
+lineWidth      = input.int(1, "Line Width", minval=1, maxval=4)
+maxSignals     = input.int(100, "Max Signals", minval=10, maxval=500)
+
+// ═══════════════════════════════════════════════════════════════
+// 변수 선언 (전역 스코프, var 필수)
+// ═══════════════════════════════════════════════════════════════
+var line[] buyLines    = array.new_line()
+var label[] buyLabels  = array.new_label()
+var line[] sellLines   = array.new_line()
+var label[] sellLabels = array.new_label()
+
+var line tempBuyLine   = na
+var label tempBuyLabel = na
+var line tempSellLine  = na
+var label tempSellLabel = na
+
+// ═══════════════════════════════════════════════════════════════
+// 계산
+// ═══════════════════════════════════════════════════════════════
+atrValue = ta.atr(atrPeriod)
+rsiValue = ta.rsi(close, 14)
+
+// 신호 조건 (상호 배타적 처리)
+rawBuy  = ta.crossover(rsiValue, 30)
+rawSell = ta.crossunder(rsiValue, 70)
+buySignal  = rawBuy and not rawSell
+sellSignal = rawSell and not rawBuy
+
+// 오프셋 계산 (na 처리 포함)
+safeAtr   = na(atrValue) ? close * 0.01 : atrValue * atrMultiplier
+buyLabelY  = low - safeAtr
+sellLabelY = high + safeAtr
+
+// ═══════════════════════════════════════════════════════════════
+// 헬퍼 함수
+// ═══════════════════════════════════════════════════════════════
+cleanupOldSignals(lineArr, labelArr, maxCount) =>
+    while array.size(lineArr) >= maxCount
+        line.delete(array.shift(lineArr))
+        if array.size(labelArr) > 0
+            label.delete(array.shift(labelArr))
+
+// ═══════════════════════════════════════════════════════════════
+// 메인 로직: 확정된 바에서 영구 신호 생성
+// ═══════════════════════════════════════════════════════════════
+if barstate.isconfirmed
+    // ─────────────────────────────────────────────────────────
+    // 매수 신호
+    // ─────────────────────────────────────────────────────────
+    if buySignal and not na(buyLabelY) and not na(low)
+        cleanupOldSignals(buyLines, buyLabels, maxSignals)
+        
+        newLine = line.new(
+            x1=bar_index, y1=low,
+            x2=bar_index, y2=buyLabelY,
+            xloc=xloc.bar_index,
+            color=color.new(lineColor, 0),
+            width=lineWidth,
+            style=line.style_solid,
+            extend=extend.none)
+        
+        newLabel = label.new(
+            x=bar_index, y=buyLabelY,
+            text="B",
+            xloc=xloc.bar_index,
+            yloc=yloc.price,
+            color=color.green,
+            textcolor=color.white,
+            style=label.style_label_up,
+            size=size.small)
+        
+        array.push(buyLines, newLine)
+        array.push(buyLabels, newLabel)
+    
+    // ─────────────────────────────────────────────────────────
+    // 매도 신호
+    // ─────────────────────────────────────────────────────────
+    if sellSignal and not na(sellLabelY) and not na(high)
+        cleanupOldSignals(sellLines, sellLabels, maxSignals)
+        
+        newLine = line.new(
+            x1=bar_index, y1=high,
+            x2=bar_index, y2=sellLabelY,
+            xloc=xloc.bar_index,
+            color=color.new(lineColor, 0),
+            width=lineWidth,
+            style=line.style_solid,
+            extend=extend.none)
+        
+        newLabel = label.new(
+            x=bar_index, y=sellLabelY,
+            text="S",
+            xloc=xloc.bar_index,
+            yloc=yloc.price,
+            color=color.red,
+            textcolor=color.white,
+            style=label.style_label_down,
+            size=size.small)
+        
+        array.push(sellLines, newLine)
+        array.push(sellLabels, newLabel)
+
+// ═══════════════════════════════════════════════════════════════
+// 실시간 바: 임시 신호 표시 (미확정)
+// ═══════════════════════════════════════════════════════════════
+if not barstate.isconfirmed
+    // 이전 임시 객체 정리
+    if not na(tempBuyLine)
+        line.delete(tempBuyLine)
+        tempBuyLine := na
+    if not na(tempBuyLabel)
+        label.delete(tempBuyLabel)
+        tempBuyLabel := na
+    if not na(tempSellLine)
+        line.delete(tempSellLine)
+        tempSellLine := na
+    if not na(tempSellLabel)
+        label.delete(tempSellLabel)
+        tempSellLabel := na
+    
+    // 매수 임시 표시
+    if buySignal and not na(buyLabelY) and not na(low)
+        tempBuyLine := line.new(
+            x1=bar_index, y1=low,
+            x2=bar_index, y2=buyLabelY,
+            xloc=xloc.bar_index,
+            color=color.new(lineColor, 50),
+            width=lineWidth,
+            style=line.style_dashed)
+        
+        tempBuyLabel := label.new(
+            x=bar_index, y=buyLabelY,
+            text="B?",
+            xloc=xloc.bar_index,
+            yloc=yloc.price,
+            color=color.new(color.green, 50),
+            textcolor=color.white,
+            style=label.style_label_up,
+            size=size.small)
+    
+    // 매도 임시 표시
+    if sellSignal and not na(sellLabelY) and not na(high)
+        tempSellLine := line.new(
+            x1=bar_index, y1=high,
+            x2=bar_index, y2=sellLabelY,
+            xloc=xloc.bar_index,
+            color=color.new(lineColor, 50),
+            width=lineWidth,
+            style=line.style_dashed)
+        
+        tempSellLabel := label.new(
+            x=bar_index, y=sellLabelY,
+            text="S?",
+            xloc=xloc.bar_index,
+            yloc=yloc.price,
+            color=color.new(color.red, 50),
+            textcolor=color.white,
+            style=label.style_label_down,
+            size=size.small)
+```
+
+---
+
+# 📊 오류 유형별 빠른 참조표
+
+| # | 오류 유형 | 증상 | 핵심 해결책 |
+|---|----------|------|------------|
+| 01 | 좌표 시스템 불일치 | 라인 안 보임 | `xloc.bar_index` 통일 |
+| 02 | 같은 좌표 연결 | 점만 보임 | Y좌표 오프셋 추가 |
+| 03 | extend 잘못 사용 | 무한 연장 | `extend.none` |
+| 04 | barstate 미체크 | 깜빡임 | `barstate.isconfirmed` |
+| 05 | var 미사용 | 참조 손실 | `var line` 선언 |
+| 06 | max_lines_count 미설정 | 자동 삭제 | `max_lines_count=500` |
+| 07 | 라인 누적 | 오래된 것 삭제 | 배열 관리 |
+| 08 | Y좌표 범위 초과 | 화면 밖 | ATR 기반 제한 |
+| 09 | na 값 미처리 | 생성 실패 | `not na()` 체크 |
+| 10 | 투명도 100% | 안 보임 | 투명도 0~50 |
+| 11 | width 0 | 안 보임 | `width=1` 이상 |
+| 12 | style 문자열 | 타입 에러 | `line.style_solid` |
+| 13 | 라벨-라인 위치 불일치 | 떨어져 보임 | 같은 labelY 사용 |
+| 14 | 생성 조건 불일치 | 짝 안 맞음 | 동일 조건 사용 |
+| 15 | set_xy 남용 | 성능 저하 | 삭제 후 재생성 |
+| 16 | 삭제 없이 생성 | 중복 | `line.delete()` 먼저 |
+| 17 | MTF 데이터 혼용 | 위치 오류 | 현재 TF만 사용 |
+| 18 | 중첩 if 로직 오류 | 부분 생성 | 조건 통합 |
+| 19 | 과거 바 참조 | 예상 외 동작 | 현재 바 사용 |
+| 20 | 매 바 재생성 | 타임아웃 | 조건부 생성만 |
+| 21 | 버전 미지정 | 문법 에러 | `//@version=5` |
+| 22 | v4 transp 사용 | 에러 | `color.new()` |
+| 23 | 타입 불일치 | 할당 에러 | `var line` |
+| 24 | series/simple 혼동 | 경고 | `color.new()` 래핑 |
+| 25 | 배열 초기화 위치 | 참조 손실 | 전역 var 선언 |
+| 26 | 빈 배열 접근 | 런타임 에러 | size 체크 |
+| 27 | 인덱스 범위 초과 | 런타임 에러 | size-1까지만 |
+| 28 | 함수 내 var | 예상 외 동작 | 전역 선언 |
+| 29 | 반환값 무시 | 수정 불가 | 변수에 저장 |
+| 30 | 삼항 연산자 생성 | 매 바 평가 | if문 사용 |
+| 31 | switch 누락 | 부분 생성 | 모든 case 처리 |
+| 32 | 매수/매도 방향 혼동 | 위치 반대 | low/high 구분 |
+| 33 | 레이블 스타일 불일치 | 화살표 반대 | up/down 맞춤 |
+| 34 | close 기준점 | 불안정 | low/high 사용 |
+| 35 | body vs wick | 캔들 내부 시작 | low/high 사용 |
+| 36 | 고정 픽셀값 | 스케일 문제 | ATR/% 기반 |
+| 37 | ATR(1) 사용 | 불안정 | ATR(14) |
+| 38 | 로그 스케일 미고려 | 왜곡 | % 기반 계산 |
+| 39 | bar_time 타임스탬프 | 계산 실수 | bar_index 사용 |
+| 40 | 미래 바 참조 | 표시 안됨 | 현재/과거만 |
+| 41 | HA 가격 사용 | 실제와 다름 | request.security |
+| 42 | Renko 미지원 | 예상 외 동작 | 차트 유형 체크 |
+| 43 | 다른 심볼 데이터 | 스케일 불일치 | 같은 심볼만 |
+| 44 | 불필요한 set_ 호출 | 성능 저하 | 생성 시 지정 |
+| 45 | 무한 루프 | 타임아웃 | 조건부 제한 |
+| 46 | 같은 위치 다중 라인 | 겹침 | 조건 통합 |
+| 47 | 캔들 가림 | 시각적 문제 | 외부에만, 얇게 |
+| 48 | 상호 배타 미처리 | 중복 생성 | `and not` 조건 |
+| 49 | line ID 로깅 | 변환 에러 | 카운터 사용 |
+| 50 | na 체크 순서 | 런타임 에러 | na 먼저 체크 |
+| 51 | 쌍 불일치 | 짝 안 맞음 | 동시 생성/삭제 |
+| 52 | 배열 동기화 실패 | 크기 다름 | 항상 쌍으로 |
+
+---
+
+# 🔧 트러블슈팅 플로우차트
+
+## 라인이 안 보일 때
+
+```
+라인이 안 보인다
+    │
+    ├─► [1] 좌표 확인
+    │   ├─ xloc.bar_index 사용했는가?
+    │   ├─ Y1 ≠ Y2 인가? (같으면 점)
+    │   ├─ na 값이 있는가?
+    │   └─ 좌표가 화면 범위 내인가?
+    │
+    ├─► [2] 스타일 확인
+    │   ├─ color 투명도 < 100?
+    │   ├─ width ≥ 1?
+    │   ├─ extend = none?
+    │   └─ style 상수 사용?
+    │
+    ├─► [3] 조건 확인
+    │   ├─ 신호 조건이 true인가?
+    │   ├─ barstate.isconfirmed 체크?
+    │   └─ not na() 체크 통과?
+    │
+    └─► [4] 제한 확인
+        ├─ max_lines_count 설정?
+        └─ 500개 미만인가?
+```
+
+## 라인이 깜빡일 때
+
+```
+라인이 깜빡인다
+    │
+    ├─► barstate.isconfirmed 추가
+    │
+    ├─► var로 라인 변수 선언
+    │
+    └─► 삭제 후 재생성 패턴 사용
+```
+
+## 라인이 사라질 때
+
+```
+라인이 사라진다
+    │
+    ├─► var 선언 확인
+    │   └─ var line myLine = na
+    │
+    ├─► 배열 관리 확인
+    │   └─ max_lines_count 초과?
+    │
+    └─► 의도치 않은 삭제 확인
+        └─ line.delete() 호출 위치
+```
+
+## 위치가 이상할 때
+
+```
+위치가 이상하다
+    │
+    ├─► 방향 확인
+    │   ├─ 매수: low 기준, 아래로
+    │   └─ 매도: high 기준, 위로
+    │
+    ├─► ATR 계산 확인
+    │   ├─ na 처리?
+    │   └─ 승수 적절?
+    │
+    ├─► 레이블 스타일 확인
+    │   ├─ 아래 배치: label_up
+    │   └─ 위 배치: label_down
+    │
+    └─► 좌표 일치 확인
+        └─ 라벨 Y = 라인 Y2
+```
+
+---
+
+# 📝 체크리스트
+
+## 코드 작성 전 체크
+
+- [ ] `//@version=5` 명시
+- [ ] `max_lines_count=500` 설정
+- [ ] `max_labels_count=500` 설정
+
+## 변수 선언 체크
+
+- [ ] 라인 변수: `var line myLine = na`
+- [ ] 레이블 변수: `var label myLabel = na`
+- [ ] 배열 변수: `var line[] lines = array.new_line()`
+- [ ] 전역 스코프에서 선언
+
+## 신호 조건 체크
+
+- [ ] `barstate.isconfirmed` 사용
+- [ ] 매수/매도 상호 배타적 처리
+- [ ] na 값 체크
+
+## 좌표 계산 체크
+
+- [ ] 매수: `low` 기준
+- [ ] 매도: `high` 기준
+- [ ] ATR 기반 오프셋 (고정값 X)
+- [ ] na 대체값 제공
+
+## 라인 생성 체크
+
+- [ ] `xloc=xloc.bar_index`
+- [ ] `extend=extend.none`
+- [ ] `width=1` 이상
+- [ ] `color` 투명도 < 100
+- [ ] `style=line.style_solid` (상수 사용)
+
+## 레이블 생성 체크
+
+- [ ] Y좌표 = 라인의 Y2
+- [ ] 아래 배치: `style=label.style_label_up`
+- [ ] 위 배치: `style=label.style_label_down`
+- [ ] 같은 조건에서 라인과 함께 생성
+
+## 관리 체크
+
+- [ ] 기존 객체 삭제 후 새로 생성
+- [ ] 배열 크기 제한 관리
+- [ ] 라인-레이블 쌍 동기화
+
+---
+
+# 🔑 핵심 코드 스니펫
+
+## 1. 기본 수직선 생성
+
+```pinescript
+//@version=5
+indicator("Basic", overlay=true, max_lines_count=500)
+
+atr = ta.atr(14)
+buySignal = ta.crossover(ta.rsi(close, 14), 30)
+
+if buySignal and barstate.isconfirmed
+    labelY = low - atr * 0.5
+    line.new(bar_index, low, bar_index, labelY, 
+        color=color.white, width=1, xloc=xloc.bar_index)
+    label.new(bar_index, labelY, "B", 
+        style=label.style_label_up, color=color.green)
+```
+
+## 2. 임시 라인 관리
+
+```pinescript
+var line tempLine = na
+
+if not barstate.isconfirmed and buySignal
+    if not na(tempLine)
+        line.delete(tempLine)
+    tempLine := line.new(bar_index, low, bar_index, labelY,
+        color=color.new(color.white, 50), style=line.style_dashed)
+```
+
+## 3. 배열 기반 관리
+
+```pinescript
+var line[] lines = array.new_line()
+var label[] labels = array.new_label()
+
+if buySignal and barstate.isconfirmed
+    // 제한 초과 시 오래된 것 삭제
+    if array.size(lines) >= 100
+        line.delete(array.shift(lines))
+        label.delete(array.shift(labels))
+    
+    // 새로 추가
+    array.push(lines, line.new(...))
+    array.push(labels, label.new(...))
+```
+
+## 4. 안전한 오프셋 계산
+
+```pinescript
+atrValue = ta.atr(14)
+safeOffset = na(atrValue) ? close * 0.01 : atrValue * 0.5
+buyLabelY = low - safeOffset
+sellLabelY = high + safeOffset
+```
+
+## 5. 상호 배타적 신호 처리
+
+```pinescript
+rawBuy = ta.crossover(rsi, 30)
+rawSell = ta.crossunder(rsi, 70)
+
+buySignal = rawBuy and not rawSell
+sellSignal = rawSell and not rawBuy
+```
+
+---
+
+# 📚 참고 자료
+
+## Pine Script 공식 문서 링크
+
+- [line.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_line.new)
+- [label.new()](https://www.tradingview.com/pine-script-reference/v5/#fun_label.new)
+- [barstate](https://www.tradingview.com/pine-script-reference/v5/#var_barstate)
+- [Arrays](https://www.tradingview.com/pine-script-docs/language/arrays/)
+
+## 버전 정보
+
+- **문서 버전**: 1.0
+- **Pine Script 버전**: v5
+- **최종 업데이트**: 2024
+- **총 오류 유형**: 52개
+
+---
+
+# 📌 요약
+
+## 가장 흔한 5가지 오류
+
+1. **barstate.isconfirmed 미사용** → 깜빡임
+2. **var 미사용** → 참조 손실
+3. **na 체크 누락** → 생성 실패
+4. **라벨-라인 위치 불일치** → 연결 안됨
+5. **max_lines_count 미설정** → 자동 삭제
+
+## 황금 규칙 5가지
+
+1. 항상 `barstate.isconfirmed`로 확정된 바에서만 생성
+2. 항상 `var`로 라인/레이블 변수 선언
+3. 항상 `na` 체크 후 생성
+4. 항상 라벨과 라인을 같은 조건에서 쌍으로 생성
+5. 항상 기존 객체 삭제 후 새로 생성
+
+---
+
+**END OF DOCUMENT**
